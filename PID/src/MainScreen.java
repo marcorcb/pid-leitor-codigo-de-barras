@@ -12,27 +12,21 @@ import org.opencv.imgproc.Imgproc;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
-import java.awt.BorderLayout;
-import java.awt.FlowLayout;
 import java.awt.HeadlessException;
 import java.awt.Image;
 import java.awt.event.ActionListener;
-import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.awt.event.ActionEvent;
-import javax.swing.BoxLayout;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
 import javax.swing.ImageIcon;
-import javax.swing.JPanel;
 import javax.swing.LayoutStyle.ComponentPlacement;
 import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.JMenuBar;
 import javax.swing.JTextPane;
 import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JMenu;
 import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
@@ -172,7 +166,7 @@ public class MainScreen {
 		public void actionPerformed(ActionEvent e) {
 			try {
 	            JFileChooser fileChooser = new JFileChooser();
-	            FileNameExtensionFilter filter = new FileNameExtensionFilter("*.Images", "jpg","gif","png");
+	            FileNameExtensionFilter filter = new FileNameExtensionFilter("*.Images", "jpg","jpeg","png");
 	            fileChooser.addChoosableFileFilter(filter);
 	            fileChooser.showOpenDialog(frame);
 	            
