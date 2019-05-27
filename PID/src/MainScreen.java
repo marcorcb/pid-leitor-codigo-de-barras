@@ -1,3 +1,4 @@
+import java.awt.Color;
 import java.awt.EventQueue;
 
 import javax.swing.JFrame;
@@ -8,6 +9,13 @@ import javax.swing.JFileChooser;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
+import org.opencv.core.Size;
+import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 import java.awt.image.BufferedImage;
@@ -18,6 +26,8 @@ import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.awt.event.ActionEvent;
 import javax.swing.GroupLayout;
 import javax.swing.GroupLayout.Alignment;
@@ -37,6 +47,7 @@ public class MainScreen {
 	private JFrame frame;
 	private final Action action = new SwingAction();
 	private File file;
+	private int threshold = 180;
 	BufferedImage image;
 	JLabel label;
 
@@ -75,30 +86,7 @@ public class MainScreen {
 		btnConverter.setToolTipText("Converter para tons de cinza");
 		btnConverter.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				
-				try {
-			         System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
-			         BufferedImage image = ImageIO.read(file);	
-
-			         byte[] data = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-			         Mat mat = new Mat(image.getHeight(), image.getWidth(), CvType.CV_8UC3);
-			         mat.put(0, 0, data);
-
-			         Mat mat1 = new Mat(image.getHeight(),image.getWidth(),CvType.CV_8UC1);
-			         Imgproc.cvtColor(mat, mat1, Imgproc.COLOR_RGB2GRAY);
-
-			         byte[] data1 = new byte[mat1.rows() * mat1.cols() * (int)(mat1.elemSize())];
-			         mat1.get(0, 0, data1);
-			         BufferedImage image1 = new BufferedImage(mat1.cols(),mat1.rows(), BufferedImage.TYPE_BYTE_GRAY);
-			         image1.getRaster().setDataElements(0, 0, mat1.cols(), mat1.rows(), data1);
-
-			         File ouptut = new File("grayscale.jpg");
-			         ImageIO.write(image1, "jpg", ouptut);
-			         label.setIcon(ResizeImage(ouptut.getAbsolutePath()));
-			         
-			      } catch (Exception e) {
-			         System.out.println("Error: " + e.getMessage());
-			      }
+				convertToGrayscale();
 			}
 		});
 		
@@ -107,9 +95,19 @@ public class MainScreen {
 		
 		JButton btnLimiarizar = new JButton("Limiarizar");
 		btnLimiarizar.setToolTipText("Limiarizar imagem");
+		btnLimiarizar.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				limiarizar();
+			}
+		});
 		
 		JButton btnLer = new JButton("Ler código");
 		btnLer.setToolTipText("Ler código de barras da imagem");
+		btnLimiarizar.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent arg0) {
+				detectRectangle();
+			}
+		});
 		
 		label = new JLabel("");
 		GroupLayout groupLayout = new GroupLayout(frame.getContentPane());
@@ -182,12 +180,77 @@ public class MainScreen {
 		}
 	}
 	
-	 public ImageIcon ResizeImage(String ImagePath)
-	    {
-	        ImageIcon MyImage = new ImageIcon(ImagePath);
-	        Image img = MyImage.getImage();
-	        Image newImg = img.getScaledInstance(label.getWidth(), label.getHeight(), Image.SCALE_SMOOTH);
-	        ImageIcon image = new ImageIcon(newImg);
-	        return image;
-	    }
+	public ImageIcon ResizeImage(String ImagePath)
+    {
+        ImageIcon MyImage = new ImageIcon(ImagePath);
+        Image img = MyImage.getImage();
+        Image newImg = img.getScaledInstance(label.getWidth(), label.getHeight(), Image.SCALE_SMOOTH);
+        ImageIcon image = new ImageIcon(newImg);
+        return image;
+    }
+	
+	public void convertToGrayscale() {
+		try {
+	        System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
+	        BufferedImage image = ImageIO.read(file);	
+
+	        byte[] data = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
+	        Mat mat = new Mat(image.getHeight(), image.getWidth(), CvType.CV_8UC3);
+	        mat.put(0, 0, data);
+
+	        Mat mat1 = new Mat(image.getHeight(),image.getWidth(),CvType.CV_8UC1);
+	        Imgproc.cvtColor(mat, mat1, Imgproc.COLOR_RGB2GRAY);
+
+	        byte[] data1 = new byte[mat1.rows() * mat1.cols() * (int)(mat1.elemSize())];
+	        mat1.get(0, 0, data1);
+	        BufferedImage image1 = new BufferedImage(mat1.cols(),mat1.rows(), BufferedImage.TYPE_BYTE_GRAY);
+	        image1.getRaster().setDataElements(0, 0, mat1.cols(), mat1.rows(), data1);
+
+	        File ouptut = new File("grayscale.jpg");
+	        ImageIO.write(image1, "jpg", ouptut);
+	        label.setIcon(ResizeImage(ouptut.getAbsolutePath()));
+	         
+	      } catch (Exception e) {
+	         System.out.println("Error: " + e.getMessage());
+	      }
+	}
+	
+	public void limiarizar() {
+		try {
+			System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
+			File file = new File("grayscale.jpg");
+			BufferedImage image = ImageIO.read(file);
+			
+			int width = image.getWidth();
+	        int height = image.getHeight();
+	        for (int i = 0; i < width; i++) {
+	            for (int j = 0; j < height; j++) {
+	            	int rgb = image.getRGB(i, j);
+	            	int r = (int)((rgb&0x00FF0000)>>>16);
+	                int g = (int)((rgb&0x0000FF00)>>>8);
+	                int b = (int) (rgb&0x000000FF);
+	                int media = (r + g + b) / 3;
+	                Color white = new Color(255, 255, 255);
+	                Color black = new Color(0, 0, 0);
+	                if (media < threshold)
+	                    image.setRGB(i, j, black.getRGB());
+	                else
+	                    image.setRGB(i, j, white.getRGB());
+	            }
+	        }
+
+	        File ouptut = new File("threshold.jpg");
+	        ImageIO.write(image, "jpg", ouptut);
+	        label.setIcon(ResizeImage(ouptut.getAbsolutePath()));
+	        
+			
+	      } catch (Exception e) {
+	    	  System.out.println("error: " + e.getMessage());
+	      }
+	}
+	
+	public void detectRectangle() {
+		
+	}
+	
 }
