@@ -1,4 +1,5 @@
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.EventQueue;
 
 import javax.swing.JFrame;
@@ -6,6 +7,7 @@ import javax.swing.JLabel;
 import javax.swing.JButton;
 import javax.swing.JFileChooser;
 
+import org.omg.CORBA.Environment;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -19,7 +21,9 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
 import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
 import java.awt.image.DataBufferByte;
+import java.awt.image.Raster;
 import java.awt.HeadlessException;
 import java.awt.Image;
 import java.awt.event.ActionListener;
@@ -47,7 +51,7 @@ public class MainScreen {
 	private JFrame frame;
 	private final Action action = new SwingAction();
 	private File file;
-	private int threshold = 180;
+	private int threshold = 190;
 	BufferedImage image;
 	JLabel label;
 
@@ -105,7 +109,7 @@ public class MainScreen {
 		btnLer.setToolTipText("Ler código de barras da imagem");
 		btnLimiarizar.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				detectRectangle();
+				
 			}
 		});
 		
@@ -148,12 +152,33 @@ public class MainScreen {
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
 		
-		JMenu mnNewMenu = new JMenu("Arquivo");
-		menuBar.add(mnNewMenu);
+		JMenu menuArquivo = new JMenu("Arquivo");
+		menuBar.add(menuArquivo);
 		
-		JMenuItem mntmOpen = new JMenuItem("Abrir imagem");
-		mntmOpen.setAction(action);
-		mnNewMenu.add(mntmOpen);
+		JMenuItem menuAbrir = new JMenuItem("Abrir imagem");
+		menuAbrir.setAction(action);
+		menuArquivo.add(menuAbrir);
+		
+		JMenu menuEditar = new JMenu("Editar");
+		menuBar.add(menuEditar);
+		
+		JMenuItem menuRemover = new JMenuItem("Remover cor");
+		menuRemover.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				//removerCor();
+			}
+		});;
+		menuEditar.add(menuRemover);
+		
+		JMenuItem menuDetectar = new JMenuItem("Detectar retângulo");
+		menuDetectar.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				detectarRetangulo();
+			}
+		});;
+		menuEditar.add(menuDetectar);
 	}
 	
 	private class SwingAction extends AbstractAction {
@@ -173,6 +198,10 @@ public class MainScreen {
 	                throw new FileNotFoundException();
 	            } else {
 	            	String path = file.getAbsolutePath();
+	            	image = ImageIO.read(file);
+	            	File output = new File("image.jpg");
+	    	        ImageIO.write(image, "jpg", output);
+	    	        file = output;
 	                label.setIcon(ResizeImage(path));
 	            }
 	        } catch (HeadlessException | IOException e1){
@@ -180,45 +209,80 @@ public class MainScreen {
 		}
 	}
 	
+	public void removerCor()
+    {
+		try {
+	        System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
+	        Mat mat = Imgcodecs.imread(file.getAbsolutePath());
+
+	        Mat mat1 = new Mat(image.getHeight(),image.getWidth(),CvType.CV_8UC1);
+	        
+	        
+	        
+	        Imgcodecs.imwrite(file.getAbsolutePath(), mat1);
+	        label.setIcon(ResizeImage(file.getAbsolutePath()));
+	         
+	    } catch (Exception e) {
+	    	System.out.println("Error: " + e.getMessage());
+	    }
+    }
+	
 	public ImageIcon ResizeImage(String ImagePath)
     {
+		Dimension imgDimension = new Dimension(image.getWidth(), image.getHeight());
+		Dimension labelDimension = new Dimension(label.getWidth(), label.getHeight());
+		Dimension newDimension = getScaledDimension(imgDimension, labelDimension);
         ImageIcon MyImage = new ImageIcon(ImagePath);
         Image img = MyImage.getImage();
-        Image newImg = img.getScaledInstance(label.getWidth(), label.getHeight(), Image.SCALE_SMOOTH);
+        Image newImg = img.getScaledInstance((int)newDimension.getWidth(), (int)newDimension.getHeight(), Image.SCALE_SMOOTH);
         ImageIcon image = new ImageIcon(newImg);
         return image;
     }
 	
+	public static Dimension getScaledDimension(Dimension imgSize, Dimension boundary) {
+
+	    int original_width = imgSize.width;
+	    int original_height = imgSize.height;
+	    int bound_width = boundary.width;
+	    int bound_height = boundary.height;
+	    int new_width = original_width;
+	    int new_height = original_height;
+	    
+	    if(original_width > original_height) {
+	        //scale width to fit
+	        new_width = bound_width;
+	        //scale height to maintain aspect ratio
+	        new_height = (new_width * original_height) / original_width;
+	    } else {
+	        //scale height to fit instead
+	        new_height = bound_height;
+	        //scale width to maintain aspect ratio
+	        new_width = (new_height * original_width) / original_height;
+	    }
+
+	    return new Dimension(new_width, new_height);
+	}
+	
 	public void convertToGrayscale() {
 		try {
 	        System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
-	        BufferedImage image = ImageIO.read(file);	
-
-	        byte[] data = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
-	        Mat mat = new Mat(image.getHeight(), image.getWidth(), CvType.CV_8UC3);
-	        mat.put(0, 0, data);
+	        Mat mat = Imgcodecs.imread(file.getAbsolutePath());
 
 	        Mat mat1 = new Mat(image.getHeight(),image.getWidth(),CvType.CV_8UC1);
 	        Imgproc.cvtColor(mat, mat1, Imgproc.COLOR_RGB2GRAY);
-
-	        byte[] data1 = new byte[mat1.rows() * mat1.cols() * (int)(mat1.elemSize())];
-	        mat1.get(0, 0, data1);
-	        BufferedImage image1 = new BufferedImage(mat1.cols(),mat1.rows(), BufferedImage.TYPE_BYTE_GRAY);
-	        image1.getRaster().setDataElements(0, 0, mat1.cols(), mat1.rows(), data1);
-
-	        File ouptut = new File("grayscale.jpg");
-	        ImageIO.write(image1, "jpg", ouptut);
-	        label.setIcon(ResizeImage(ouptut.getAbsolutePath()));
+	        
+	        Imgcodecs.imwrite(file.getAbsolutePath(), mat1);
+	        label.setIcon(ResizeImage(file.getAbsolutePath()));
 	         
-	      } catch (Exception e) {
-	         System.out.println("Error: " + e.getMessage());
-	      }
+	    } catch (Exception e) {
+	    	System.out.println("Error: " + e.getMessage());
+	    }
 	}
 	
 	public void limiarizar() {
 		try {
 			System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
-			File file = new File("grayscale.jpg");
+			File file = new File("image.jpg");
 			BufferedImage image = ImageIO.read(file);
 			
 			int width = image.getWidth();
@@ -239,7 +303,7 @@ public class MainScreen {
 	            }
 	        }
 
-	        File ouptut = new File("threshold.jpg");
+	        File ouptut = new File("image.jpg");
 	        ImageIO.write(image, "jpg", ouptut);
 	        label.setIcon(ResizeImage(ouptut.getAbsolutePath()));
 	        
@@ -249,8 +313,70 @@ public class MainScreen {
 	      }
 	}
 	
-	public void detectRectangle() {
-		
+	public void detectarRetangulo() {
+		try {
+	        System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
+	        Mat mat = Imgcodecs.imread(file.getAbsolutePath());
+
+	        Mat mat1 = new Mat(image.getHeight(),image.getWidth(),CvType.CV_8UC1);
+	        
+	        Imgproc.Canny(mat, mat1, 50, 50);
+	        
+	        Imgproc.GaussianBlur(mat1, mat1, new  org.opencv.core.Size(5, 5), 5);
+	        
+	        List<MatOfPoint> contours = new ArrayList<MatOfPoint>();
+	        Imgproc.findContours(mat1, contours, new Mat(), Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_SIMPLE);
+
+	        double maxArea = -1;
+	        int maxAreaIdx = -1;
+	        MatOfPoint temp_contour = contours.get(0); //the largest is at the index 0 for starting point
+	        MatOfPoint2f approxCurve = new MatOfPoint2f();
+	        MatOfPoint largest_contour = contours.get(0);
+
+	        List<MatOfPoint> largest_contours = new ArrayList<MatOfPoint>();
+
+	        for (int idx = 0; idx < contours.size(); idx++) {
+	            temp_contour = contours.get(idx);
+	            double contourarea = Imgproc.contourArea(temp_contour);
+	            //compare this contour to the previous largest contour found
+	            if (contourarea > maxArea) {
+	                //check if this contour is a square
+	                MatOfPoint2f new_mat = new MatOfPoint2f( temp_contour.toArray() );
+	                int contourSize = (int)temp_contour.total();
+	                MatOfPoint2f approxCurve_temp = new MatOfPoint2f();
+	                Imgproc.approxPolyDP(new_mat, approxCurve_temp, contourSize*0.05, true);
+	                if (approxCurve_temp.total() == 4) {
+	                    maxArea = contourarea;
+	                    maxAreaIdx = idx;
+	                    approxCurve=approxCurve_temp;
+	                    largest_contour = temp_contour;
+	                }
+	            }
+	        }
+
+	        Imgproc.cvtColor(mat1, mat1, Imgproc.COLOR_BayerBG2RGB);
+	        
+	        double[] temp_double;
+	        temp_double = approxCurve.get(0,0);       
+	        Point p1 = new Point(temp_double[0], temp_double[1]);
+	        temp_double = approxCurve.get(1,0);       
+	        Point p2 = new Point(temp_double[0], temp_double[1]);
+	        temp_double = approxCurve.get(2,0);       
+	        Point p3 = new Point(temp_double[0], temp_double[1]);
+	        temp_double = approxCurve.get(3,0);       
+	        Point p4 = new Point(temp_double[0], temp_double[1]);
+	        
+	        Imgproc.line(mat1, p1, p2, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat1, p2, p3, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat1, p3, p4, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat1, p4, p1, new Scalar(0, 0, 255), 5);
+	        
+	        Imgcodecs.imwrite(file.getAbsolutePath(), mat1);
+	        label.setIcon(ResizeImage(file.getAbsolutePath()));
+	        
+		} catch (Exception e) {
+	    	  System.out.println("error: " + e.getMessage());
+	    }
 	}
 	
 }
