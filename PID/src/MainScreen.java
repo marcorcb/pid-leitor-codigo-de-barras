@@ -1,6 +1,8 @@
+﻿import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Graphics2D;
 
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -20,12 +22,15 @@ import org.opencv.core.Size;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 
+import sun.awt.image.ToolkitImage;
+
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorModel;
 import java.awt.image.DataBufferByte;
 import java.awt.image.Raster;
 import java.awt.HeadlessException;
 import java.awt.Image;
+import java.awt.RenderingHints;
 import java.awt.event.ActionListener;
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -52,6 +57,8 @@ public class MainScreen {
 	private final Action action = new SwingAction();
 	private File file;
 	private int threshold = 190;
+	BufferedImage resizedImage;
+	private int resizeX, resizeY, resizeWidth, resizeHeight;
 	BufferedImage image;
 	JLabel label;
 
@@ -107,9 +114,9 @@ public class MainScreen {
 		
 		JButton btnLer = new JButton("Ler código");
 		btnLer.setToolTipText("Ler código de barras da imagem");
-		btnLimiarizar.addActionListener(new ActionListener() {
+		btnLer.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
-				
+				lerCodigo();
 			}
 		});
 		
@@ -162,14 +169,6 @@ public class MainScreen {
 		JMenu menuEditar = new JMenu("Editar");
 		menuBar.add(menuEditar);
 		
-		JMenuItem menuRemover = new JMenuItem("Remover cor");
-		menuRemover.addActionListener(new ActionListener() {
-			@Override
-			public void actionPerformed(ActionEvent e) {
-				//removerCor();
-			}
-		});;
-		menuEditar.add(menuRemover);
 		
 		JMenuItem menuDetectar = new JMenuItem("Detectar retângulo");
 		menuDetectar.addActionListener(new ActionListener() {
@@ -179,6 +178,15 @@ public class MainScreen {
 			}
 		});;
 		menuEditar.add(menuDetectar);
+		
+		JMenuItem menuRemover = new JMenuItem("Cortar código de barras");
+		menuRemover.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				resizeImage();
+			}
+		});;
+		menuEditar.add(menuRemover);
 	}
 	
 	private class SwingAction extends AbstractAction {
@@ -365,13 +373,18 @@ public class MainScreen {
 	        Point p3 = new Point(temp_double[0], temp_double[1]);
 	        temp_double = approxCurve.get(3,0);       
 	        Point p4 = new Point(temp_double[0], temp_double[1]);
+
+	        resizeX = (int)p1.x;
+	        resizeY = (int)p1.y;
+	        resizeWidth =(int)p3.x - resizeX;
+	        resizeHeight = (int)p3.y - resizeY;
 	        
-	        Imgproc.line(mat1, p1, p2, new Scalar(0, 0, 255), 5);
-	        Imgproc.line(mat1, p2, p3, new Scalar(0, 0, 255), 5);
-	        Imgproc.line(mat1, p3, p4, new Scalar(0, 0, 255), 5);
-	        Imgproc.line(mat1, p4, p1, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat, p1, p2, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat, p2, p3, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat, p3, p4, new Scalar(0, 0, 255), 5);
+	        Imgproc.line(mat, p4, p1, new Scalar(0, 0, 255), 5);
 	        
-	        Imgcodecs.imwrite(file.getAbsolutePath(), mat1);
+	        Imgcodecs.imwrite(file.getAbsolutePath(), mat);
 	        label.setIcon(ResizeImage(file.getAbsolutePath()));
 	        
 		} catch (Exception e) {
@@ -379,4 +392,120 @@ public class MainScreen {
 	    }
 	}
 	
+	public void resizeImage() {
+		try {
+			resizedImage = image.getSubimage(resizeX, resizeY, resizeWidth, resizeHeight);
+	        ImageIO.write(resizedImage, "jpg", file);
+	        label.setIcon(ResizeImage(file.getAbsolutePath()));
+		} catch(IOException e) {
+			System.out.println("Error: " + e.getMessage());
+		}
+	}
+	
+	public void lerCodigo() {
+		double min, max;
+		boolean wasBlack = true;
+		String binary = "";
+		System.loadLibrary( Core.NATIVE_LIBRARY_NAME );
+        Mat mat = Imgcodecs.imread(file.getAbsolutePath());
+        int height = (int) mat.size().height;
+        int width = (int) mat.size().width;
+        if(height > width) {
+        	int firstLine = getFirstLine(mat);
+        	int lastLine = getLastLine(mat);
+        	int lineSize = (lastLine - firstLine)/95;
+        	if (lineSize == 0)
+        		lineSize = 1;
+        	for(int i = firstLine; i < lastLine; i++) {
+        		if(i % lineSize == 0) {
+        			double[] rgb = mat.get(width/2, i);
+            		if(isBlack(rgb))
+            			binary = binary + "1";
+            		else
+            			binary = binary + "0";
+        		}
+        	}
+        } else {
+        	int firstLine = getFirstLine(mat);
+        	int lastLine = getLastLine(mat);
+        	int lineSize = (lastLine - firstLine)/95;
+        	if (lineSize == 0)
+        		lineSize = 1;
+        	
+        	for(int i = firstLine; i < lastLine; i++) {
+        		if(i % lineSize == 0) {
+        			double[] rgb = mat.get(i, height/2);
+        			if(isBlack(rgb))
+        				binary = binary + "1";
+        			else
+        				binary = binary + "0";
+        		}
+        	}
+        
+        }
+        
+        System.out.println(binary);
+	}
+	
+	public int getFirstLine(Mat mat) {
+		boolean wasBlack = true;
+        int height = (int) mat.size().height;
+        int width = (int) mat.size().width;
+		if(height > width) {
+        	for(int i = 0; i < height; i++) {
+        		double[] rgb = mat.get(width/2, i);
+        		if (isBlack(rgb) && !wasBlack) {
+        			return i;
+        		} else if(!isBlack(rgb) && wasBlack)
+        			wasBlack = false;
+        	}
+        	return 0;
+        } else {
+        	for(int i = 0; i < width; i++) {
+            	double[] rgb = mat.get(i, height/2);
+            	if (isBlack(rgb) && !wasBlack) {
+        			return i;
+        		} else if(!isBlack(rgb) && wasBlack)
+        			wasBlack = false;
+            }
+        	return 0;
+        }
+	}
+	
+	public int getLastLine(Mat mat) {
+		boolean wasBlack = true;
+        int height = (int) mat.size().height;
+        int width = (int) mat.size().width;
+		if(height > width) {
+        	for(int i = height-1; i >= 0; i--) {
+        		double[] rgb = mat.get(width/2, i);
+        		if (isBlack(rgb) && !wasBlack) {
+        			return i;
+        		} else if(!isBlack(rgb) && wasBlack)
+        			wasBlack = false;
+        	}
+        	return 0;
+        } else {
+        	for(int i = width-1; i >= 0; i--) {
+            	double[] rgb = mat.get(i, height/2);
+            	if (isBlack(rgb) && !wasBlack) {
+        			return i;
+        		} else if(!isBlack(rgb) && wasBlack)
+        			wasBlack = false;
+            }
+        	return 0;
+        }
+	}
+	
+	public boolean isBlack(double[] rgb) {
+		if(rgb != null) {
+			double aux = 0.0;
+			for(Double value : rgb) {
+				aux = aux + value;
+			}
+			aux = aux /3;
+			return !(aux < 177.0 );	
+		}
+		return false;
+	}
 }
